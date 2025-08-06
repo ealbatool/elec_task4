@@ -1,0 +1,134 @@
+
+#include <Servo.h>
+
+// Ultrasonic Pins
+#define TRIG_PIN A1
+#define ECHO_PIN A2
+
+// DC Motor Pins (L293D)
+#define IN1 4
+#define IN2 5
+#define IN3 7
+#define IN4 8
+#define EN_A 3  // PWM speed for Motor Pair A (A1+A2)
+#define EN_B 6 // PWM speed for Motor Pair B (B1+B2)
+
+// Servo Pin
+#define SERVO_PIN A3
+
+Servo myServo;
+int speed = 150; // PWM speed (0-255)
+
+void setup() {
+  // Ultrasonic Setup
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // DC Motor Setup
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  pinMode(EN_A, OUTPUT);
+  pinMode(EN_B, OUTPUT);
+
+  // Servo Setup
+  myServo.attach(SERVO_PIN);
+
+  Serial.begin(9600);
+}
+
+// Measure distance in cm
+int getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  return duration * 0.034 / 2;
+}
+
+// Scan environment (returns distance at a given angle)
+int scan(int angle) {
+  myServo.write(angle);
+  delay(500); // Allow servo to reach position
+  return getDistance();
+}
+
+// Move DC motors forward
+void moveForward() {
+  analogWrite(EN_A, speed);
+  analogWrite(EN_B, speed);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  Serial.println("Moving FORWARD");
+}
+
+// Turn left
+void turnLeft() {
+  analogWrite(EN_A, speed);
+  analogWrite(EN_B, speed);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);  // Left motors reverse
+  digitalWrite(IN3, HIGH);  // Right motors forward
+  digitalWrite(IN4, LOW);
+  Serial.println("Turning LEFT");
+}
+
+// Turn right
+void turnRight() {
+  analogWrite(EN_A, speed);
+  analogWrite(EN_B, speed);
+  digitalWrite(IN1, HIGH);  // Left motors forward
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);   // Right motors reverse
+  digitalWrite(IN4, HIGH);
+  Serial.println("Turning RIGHT");
+}
+
+// Stop all motors
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  Serial.println("STOPPED");
+}
+
+void loop() {
+  // Scan left (0°), center (90°), right (180°)
+  int leftDist = scan(0);
+  int centerDist = scan(90);
+  int rightDist = scan(180);
+  myServo.write(90); // Return to center
+
+  Serial.print("Left: "); Serial.print(leftDist); Serial.print(" cm | ");
+  Serial.print("Center: "); Serial.print(centerDist); Serial.print(" cm | ");
+  Serial.print("Right: "); Serial.print(rightDist); Serial.println(" cm");
+
+  // Obstacle avoidance logic
+  if (centerDist > 30) {
+    moveForward(); // Clear path ahead
+  } 
+  else if (leftDist > rightDist && leftDist > 20) {
+    turnLeft(); // More space on left
+    delay(500); // Turn duration
+  } 
+  else if (rightDist > leftDist && rightDist > 20) {
+    turnRight(); // More space on right
+    delay(500);
+  } 
+  else {
+    stopMotors(); // Too close to obstacles
+    delay(1000);
+    // Optional: Reverse and turn
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
+    delay(300);
+  }
+}
